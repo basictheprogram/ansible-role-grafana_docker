@@ -1,0 +1,66 @@
+---
+# Container ------------------------------------------------------------------
+grafana_docker_image: grafana/grafana
+# The floating tag, as in the hand-built compose project. The role pulls only a
+# missing image, so a host keeps its current image until it is pulled again.
+grafana_docker_version: latest
+grafana_docker_container_name: grafana
+grafana_docker_restart_policy: unless-stopped
+# Compose project name. The data volume is <project>_grafana-data, so changing
+# this on a host that already runs Grafana orphans its dashboards and users.
+grafana_docker_project_name: grafana
+grafana_docker_compose_dir: /opt/grafana
+grafana_docker_compose_dir_mode: "0755"
+
+# Networks ---------------------------------------------------------------------
+# Docker networks the container joins. They are shared with other containers
+# (Loki, Prometheus, a Traefik on the same host), and this role owns them: it
+# creates each one that is missing and never removes any.
+grafana_docker_networks:
+  - grafana_frontend
+  - grafana_backend
+# Set false to only check that the networks exist (another role creates them).
+grafana_docker_manage_networks: true
+
+# Network exposure -------------------------------------------------------------
+# Grafana's HTTP port is published on this address and port. Loopback by
+# default. Set it to "" to publish nothing, when a Traefik on this host reaches
+# Grafana over a shared Docker network.
+grafana_docker_publish_address: "127.0.0.1"
+grafana_docker_publish_port: 3000
+
+# Configuration ----------------------------------------------------------------
+# Environment for the container, for example GF_SERVER_ROOT_URL. Visible in
+# compose.yml; put anything secret in grafana_docker_env_secrets.
+grafana_docker_env: {}
+
+# Secret environment, for example GF_SECURITY_ADMIN_PASSWORD. Written to an
+# env file with mode 0600 and never to compose.yml. Keep the values in a vault.
+grafana_docker_env_secrets: {}
+
+# Datasource provisioning. Each entry is rendered as written under
+# `datasources:` in provisioning/datasources/datasources.yml. A datasource's
+# secureJsonData can hold credentials, so the file is mode 0640.
+#
+#   - name: Prometheus
+#     type: prometheus
+#     access: proxy
+#     url: http://prometheus:9090
+#     isDefault: true
+#     editable: false
+grafana_docker_datasources: []
+
+# Logging ----------------------------------------------------------------------
+grafana_docker_log_driver: journald
+# Driver options, for example for syslog:
+#   syslog-address: "tcp://10.0.0.5:514"
+#   syslog-format: rfc5424
+#   tag: "{{ '{{.Name}}' }}"
+grafana_docker_log_options: {}
+
+# Extra container labels (for example Traefik labels).
+grafana_docker_labels: {}
+
+# Verification -----------------------------------------------------------------
+grafana_docker_verify_ready: true
+grafana_docker_verify_timeout: 120

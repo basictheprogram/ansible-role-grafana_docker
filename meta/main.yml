@@ -1,0 +1,27 @@
+---
+dependencies: []
+
+galaxy_info:
+  namespace: realtime
+  role_name: grafana_docker
+  author: "Bob Tanner"
+  company: "Real Time Enterprises, Inc."
+  issue_tracker_url: "https://github.com/basictheprogram/ansible-role-grafana_docker/issues"
+  description: >-
+    Deploys Grafana as a Docker Compose service on a single host. Creates the
+    Docker networks it joins, renders the datasource provisioning and the
+    compose file, keeps secrets in a mode 0600 env file, publishes the HTTP
+    port on a chosen address, and waits for the health endpoint. Does not
+    install Docker. Supports Debian (trixie) and Ubuntu (jammy, noble,
+    resolute).
+  license: "MIT"
+  min_ansible_version: "2.20"
+  galaxy_tags:
+    - grafana
+    - dashboards
+    - observability
+    - monitoring
+    - docker
+    - compose
+    - ubuntu
+    - debian

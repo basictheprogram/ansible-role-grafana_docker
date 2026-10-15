@@ -1,0 +1,108 @@
+---
+argument_specs:
+  main:
+    short_description: Deploy Grafana as a Docker Compose service
+    description:
+      - Creates the Docker networks, renders datasource provisioning, a secret
+        env file and the compose file, brings the project up with docker
+        compose, and waits for /api/health. Does not install Docker.
+    options:
+      grafana_docker_image:
+        type: str
+        default: "grafana/grafana"
+        description: >-
+          Grafana container image.
+      grafana_docker_version:
+        type: str
+        default: "latest"
+        description: >-
+          Image tag. The default is the floating latest tag; the role pulls only a missing image, so a host keeps its image until it is pulled again.
+      grafana_docker_container_name:
+        type: str
+        default: "grafana"
+        description: >-
+          Container name.
+      grafana_docker_restart_policy:
+        type: str
+        default: "unless-stopped"
+        description: >-
+          Docker restart policy.
+      grafana_docker_project_name:
+        type: str
+        default: "grafana"
+        description: >-
+          Compose project name. The data volume is <project>_grafana-data; changing it on a host that already runs Grafana orphans its data.
+      grafana_docker_compose_dir:
+        type: str
+        default: "/opt/grafana"
+        description: >-
+          Directory holding compose.yml, grafana.env and provisioning/.
+      grafana_docker_compose_dir_mode:
+        type: str
+        default: "0755"
+        description: >-
+          Mode of the compose directory.
+      grafana_docker_networks:
+        type: list
+        default:
+          - grafana_frontend
+          - grafana_backend
+        elements: str
+        description: >-
+          Docker networks the container joins. Shared with other containers; this role creates missing ones and never removes any.
+      grafana_docker_manage_networks:
+        type: bool
+        default: true
+        description: >-
+          Create the networks. When false the role only checks that they exist.
+      grafana_docker_publish_address:
+        type: str
+        default: "127.0.0.1"
+        description: >-
+          Host address Grafana's HTTP port is published on. Empty publishes nothing.
+      grafana_docker_publish_port:
+        type: int
+        default: 3000
+        description: >-
+          Host port Grafana's HTTP port is published on.
+      grafana_docker_env:
+        type: dict
+        default: {}
+        description: >-
+          Container environment, visible in compose.yml. Not for secrets.
+      grafana_docker_env_secrets:
+        type: dict
+        default: {}
+        description: >-
+          Secret container environment, written to grafana.env with mode 0600 and never to compose.yml. Values must not contain a single quote or newline.
+      grafana_docker_datasources:
+        type: list
+        default: []
+        elements: dict
+        description: >-
+          Datasource provisioning entries, rendered as written under datasources:. Each needs name and type.
+      grafana_docker_log_driver:
+        type: str
+        default: "journald"
+        description: >-
+          Docker logging driver for the container.
+      grafana_docker_log_options:
+        type: dict
+        default: {}
+        description: >-
+          Logging driver options.
+      grafana_docker_labels:
+        type: dict
+        default: {}
+        description: >-
+          Extra container labels.
+      grafana_docker_verify_ready:
+        type: bool
+        default: true
+        description: >-
+          Wait for /api/health after bringing the service up.
+      grafana_docker_verify_timeout:
+        type: int
+        default: 120
+        description: >-
+          Seconds to wait for /api/health.
