@@ -1,0 +1,118 @@
+---
+- name: Converge
+  hosts: all
+  pre_tasks:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        force_apt_get: true
+      changed_when: false
+      when: ansible_facts.os_family == 'Debian'
+
+  vars:
+    # Grafana is never started in molecule (the docker tasks are tagged
+    # molecule-notest); only the rendered files are tested. The secret below is
+    # a fake test value.
+    grafana_docker_log_driver: syslog
+    grafana_docker_log_options:
+      syslog-address: "udp://10.0.0.5:514"
+      syslog-format: rfc5424
+      tag: "grafana"
+    grafana_docker_publish_address: "10.0.0.250"
+    grafana_docker_env:
+      GF_SERVER_ROOT_URL: "https://grafana.example.test"
+      GF_USERS_ALLOW_SIGN_UP: false
+    grafana_docker_env_secrets:
+      GF_SECURITY_ADMIN_PASSWORD: "molecule-fake-password"
+    grafana_docker_labels:
+      traefik.enable: "true"
+      traefik.http.routers.grafana.rule: "Host(`grafana.example.test`)"
+    grafana_docker_datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+      - name: Loki
+        type: loki
+        access: proxy
+        url: http://loki:3100
+        jsonData:
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: fake
+
+  roles:
+    - role: realtime.grafana_docker
+
+  post_tasks:
+    - name: Render again with nothing configured and nothing published
+      ansible.builtin.include_role:
+        name: realtime.grafana_docker
+        tasks_from: install.yml
+      vars:
+        grafana_docker_compose_dir: /opt/grafana-bare
+        grafana_docker_publish_address: ""
+        grafana_docker_env: {}
+        grafana_docker_env_secrets: {}
+        grafana_docker_labels: {}
+        grafana_docker_log_options: {}
+        grafana_docker_networks: []
+        grafana_docker_datasources: []
+
+- name: Preflight cases
+  hosts: all
+  gather_facts: true
+  vars:
+    _preflight_cases:
+      - name: project name with uppercase
+        expect: "grafana_docker_project_name must be lowercase"
+        vars:
+          grafana_docker_project_name: "Grafana"
+      - name: port out of range
+        expect: "grafana_docker_publish_port must be 1-65535"
+        vars:
+          grafana_docker_publish_port: 70000
+      - name: unpublished with no network
+        expect: "is not published"
+        vars:
+          grafana_docker_publish_address: ""
+          grafana_docker_networks: []
+      - name: networks not a list
+        expect: "grafana_docker_networks must be a list"
+        vars:
+          grafana_docker_networks: "grafana_backend"
+      - name: manage_networks not a boolean
+        expect: "grafana_docker_manage_networks must be true or false"
+        vars:
+          grafana_docker_manage_networks: "yes please"
+      - name: secret with a single quote
+        expect: "must not contain a single quote"
+        vars:
+          grafana_docker_env_secrets:
+            GF_SECURITY_ADMIN_PASSWORD: "it's a trap"
+      - name: datasource missing a type
+        expect: "needs name and type"
+        vars:
+          grafana_docker_datasources:
+            - { name: Broken }
+      - name: duplicate datasource name
+        expect: "duplicate name"
+        vars:
+          grafana_docker_datasources:
+            - { name: One, type: prometheus }
+            - { name: One, type: loki }
+      - name: two default datasources
+        expect: "only one entry"
+        vars:
+          grafana_docker_datasources:
+            - { name: One, type: prometheus, isDefault: true }
+            - { name: Two, type: loki, isDefault: true }
+  tasks:
+    - name: Preflight case | run every invalid case
+      ansible.builtin.include_tasks: tasks/preflight_case.yml
+      loop: "{{ _preflight_cases }}"
+      loop_control:
+        label: "{{ item.name }}"
