@@ -1,0 +1,11 @@
+---
+- name: Restart grafana
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_docker_compose_dir }}"
+    project_name: "{{ grafana_docker_project_name }}"
+    state: restarted
+  when:
+    - _grafana_docker_docker_check.rc | default(1) == 0
+    - not (_grafana_docker_up.changed | default(false))
+    - not (ansible_check_mode and (_grafana_docker_dirs.changed | default(false)))
+  tags: molecule-notest

@@ -1,0 +1,12 @@
+---
+- name: Service | bring up Grafana via docker compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ grafana_docker_compose_dir }}"
+    project_name: "{{ grafana_docker_project_name }}"
+    state: present
+    pull: missing
+  register: _grafana_docker_up
+  # In --check mode the directories and files above are not created on a first
+  # run, so compose has nothing to read. Skip rather than fail.
+  when: not (ansible_check_mode and (_grafana_docker_dirs.changed | default(false)))
+  tags: molecule-notest

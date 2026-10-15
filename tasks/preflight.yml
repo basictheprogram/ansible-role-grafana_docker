@@ -1,0 +1,138 @@
+---
+- name: Preflight | ansible-core version
+  ansible.builtin.assert:
+    that:
+      - ansible_version.full is version('2.20', '>=')
+    fail_msg: "realtime.grafana_docker requires ansible-core >= 2.20, found {{ ansible_version.full }}"
+    quiet: true
+
+- name: Preflight | supported OS family
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'Debian'
+    fail_msg: "realtime.grafana_docker supports Debian and Ubuntu, found {{ ansible_facts['os_family'] }}"
+    quiet: true
+
+- name: Preflight | project name and image
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_project_name is match('^[a-z0-9][a-z0-9_-]*$')
+      - grafana_docker_image | length > 0
+      - grafana_docker_version | string | length > 0
+    fail_msg: >-
+      grafana_docker_project_name must be lowercase letters, digits, '-' or '_'
+      and grafana_docker_image and grafana_docker_version must not be empty
+    quiet: true
+
+- name: Preflight | published port
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_publish_port | int > 0
+      - grafana_docker_publish_port | int < 65536
+    fail_msg: "grafana_docker_publish_port must be 1-65535, got '{{ grafana_docker_publish_port }}'"
+    quiet: true
+
+- name: Preflight | an unpublished Grafana must share a network with its proxy
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_networks | length > 0
+    fail_msg: >-
+      grafana_docker_publish_address is empty, so Grafana is not published; it then
+      needs at least one entry in grafana_docker_networks for a proxy to reach it
+    quiet: true
+  when: grafana_docker_publish_address | length == 0
+
+- name: Preflight | networks, labels, env and log options have the right shape
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_networks is sequence
+      - grafana_docker_networks is not string
+      - grafana_docker_labels is mapping
+      - grafana_docker_log_options is mapping
+      - grafana_docker_env is mapping
+      - grafana_docker_env_secrets is mapping
+      - grafana_docker_manage_networks is boolean
+    fail_msg: >-
+      grafana_docker_networks must be a list; grafana_docker_labels,
+      grafana_docker_log_options, grafana_docker_env and
+      grafana_docker_env_secrets must be mappings; grafana_docker_manage_networks
+      must be true or false
+    quiet: true
+
+- name: Preflight | secret values fit a compose env file
+  ansible.builtin.assert:
+    that:
+      - "\"'\" not in (item.value | string)"
+      - "'\n' not in (item.value | string)"
+    fail_msg: "grafana_docker_env_secrets.{{ item.key }} must not contain a single quote or a newline"
+    quiet: true
+  loop: "{{ grafana_docker_env_secrets | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  no_log: true
+
+- name: Preflight | datasources have the keys Grafana requires
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_datasource is mapping
+      - grafana_docker_datasource.name is defined
+      - grafana_docker_datasource.type is defined
+    fail_msg: "each grafana_docker_datasources entry needs name and type"
+    quiet: true
+  loop: "{{ grafana_docker_datasources }}"
+  loop_control:
+    loop_var: grafana_docker_datasource
+    label: "{{ grafana_docker_datasource.name | default('(unnamed)') if grafana_docker_datasource is mapping else '(not a mapping)' }}"
+
+- name: Preflight | datasource names are unique
+  ansible.builtin.assert:
+    that:
+      - (grafana_docker_datasources | map(attribute='name') | list | unique | length) == (grafana_docker_datasources | length)
+    fail_msg: "grafana_docker_datasources contains a duplicate name"
+    quiet: true
+
+- name: Preflight | at most one default datasource
+  ansible.builtin.assert:
+    that:
+      - (grafana_docker_datasources | selectattr('isDefault', 'defined') | selectattr('isDefault') | list | length) <= 1
+    fail_msg: "only one entry in grafana_docker_datasources may set isDefault: true"
+    quiet: true
+
+- name: Preflight | Docker is available
+  ansible.builtin.command: docker info
+  register: _grafana_docker_docker_check
+  changed_when: false
+  failed_when: false
+  tags: molecule-notest
+
+- name: Preflight | fail clearly when Docker is missing
+  ansible.builtin.fail:
+    msg: >-
+      Docker does not appear to be installed or running on this host. This role
+      does not install Docker; run realtime.docker (or equivalent) first.
+  when: _grafana_docker_docker_check.rc | default(0) != 0
+  tags: molecule-notest
+
+- name: Preflight | required Docker networks exist
+  ansible.builtin.command: "docker network inspect {{ grafana_docker_network }}"
+  register: _grafana_docker_network_check
+  changed_when: false
+  failed_when: false
+  loop: "{{ grafana_docker_networks }}"
+  loop_control:
+    loop_var: grafana_docker_network
+  when: not (grafana_docker_manage_networks | bool)
+  tags: molecule-notest
+
+- name: Preflight | fail clearly when a Docker network is missing
+  ansible.builtin.fail:
+    msg: >-
+      Docker network '{{ item.grafana_docker_network }}' does not exist and
+      grafana_docker_manage_networks is false, so this role will not create it.
+  when:
+    - not (grafana_docker_manage_networks | bool)
+    - item.rc | default(0) != 0
+  loop: "{{ _grafana_docker_network_check.results | default([]) }}"
+  loop_control:
+    label: "{{ item.grafana_docker_network | default('') }}"
+  tags: molecule-notest

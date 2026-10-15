@@ -1,0 +1,6 @@
+---
+# Managed by Ansible (realtime.grafana_docker). Local changes are overwritten.
+apiVersion: 1
+
+datasources:
+{{ grafana_docker_datasources | to_nice_yaml(indent=2) | indent(2, first=true) }}

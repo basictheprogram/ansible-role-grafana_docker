@@ -1,0 +1,16 @@
+---
+- name: Preflight checks
+  ansible.builtin.import_tasks: preflight.yml
+  tags: always
+
+- name: Create Docker networks
+  ansible.builtin.import_tasks: network.yml
+
+- name: Render provisioning, environment and compose file
+  ansible.builtin.import_tasks: install.yml
+
+- name: Start Grafana
+  ansible.builtin.import_tasks: service.yml
+
+- name: Verify Grafana is healthy
+  ansible.builtin.import_tasks: verify.yml

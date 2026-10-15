@@ -1,0 +1,65 @@
+---
+# Managed by Ansible (realtime.grafana_docker). Local changes are overwritten.
+name: {{ grafana_docker_project_name }}
+
+services:
+  grafana:
+    container_name: {{ grafana_docker_container_name }}
+    image: {{ grafana_docker_image }}:{{ grafana_docker_version }}
+    restart: {{ grafana_docker_restart_policy }}
+{% if grafana_docker_publish_address | length > 0 %}
+
+    ports:
+      - "{{ grafana_docker_publish_address }}:{{ grafana_docker_publish_port }}:3000"
+{% endif %}
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+{% if grafana_docker_env | length > 0 %}
+
+    environment:
+{% for key, value in grafana_docker_env.items() %}
+      {{ key }}: {{ (value | lower if value is boolean else value | string) | to_json }}
+{% endfor %}
+{% endif %}
+{% if grafana_docker_env_secrets | length > 0 %}
+
+    env_file:
+      - ./grafana.env
+{% endif %}
+{% if grafana_docker_labels | length > 0 %}
+
+    labels:
+{% for key, value in grafana_docker_labels.items() %}
+      - {{ (key ~ '=' ~ value) | to_json }}
+{% endfor %}
+{% endif %}
+
+    logging:
+      driver: {{ grafana_docker_log_driver }}
+{% if grafana_docker_log_options | length > 0 %}
+      options:
+{% for key, value in grafana_docker_log_options.items() %}
+        {{ key }}: {{ value | to_json }}
+{% endfor %}
+{% endif %}
+{% if grafana_docker_networks | length > 0 %}
+
+    networks:
+{% for net in grafana_docker_networks %}
+      - {{ net }}
+{% endfor %}
+{% endif %}
+
+volumes:
+  grafana-data:
+    driver: local
+{% if grafana_docker_networks | length > 0 %}
+
+networks:
+{% for net in grafana_docker_networks %}
+  {{ net }}:
+    external: true
+{% endfor %}
+{% endif %}

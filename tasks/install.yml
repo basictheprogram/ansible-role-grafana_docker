@@ -1,0 +1,42 @@
+---
+- name: Install | compose and provisioning directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ grafana_docker_compose_dir_mode }}"
+  register: _grafana_docker_dirs
+  loop:
+    - "{{ grafana_docker_compose_dir }}"
+    - "{{ grafana_docker_compose_dir }}/provisioning"
+    - "{{ grafana_docker_compose_dir }}/provisioning/datasources"
+
+- name: Install | render datasource provisioning
+  ansible.builtin.template:
+    src: datasources.yml.j2
+    dest: "{{ grafana_docker_compose_dir }}/provisioning/datasources/datasources.yml"
+    owner: root
+    group: root
+    mode: "0640"
+  no_log: true
+  notify: Restart grafana
+
+- name: Install | write the secret environment file
+  ansible.builtin.template:
+    src: grafana.env.j2
+    dest: "{{ grafana_docker_compose_dir }}/grafana.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: grafana_docker_env_secrets | length > 0
+  notify: Restart grafana
+
+- name: Install | render compose file
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ grafana_docker_compose_dir }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"

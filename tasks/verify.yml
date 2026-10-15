@@ -1,0 +1,20 @@
+---
+# Grafana answers /api/health with 200 once its database is migrated, which can
+# take a while after an upgrade. Skipped when Grafana is not published
+# (grafana_docker_publish_address is empty): the host cannot reach it, so check
+# health through the proxy.
+- name: Verify | wait for Grafana to report healthy
+  ansible.builtin.uri:
+    url: "http://{{ (grafana_docker_publish_address in ['0.0.0.0', '::']) | ternary('127.0.0.1', grafana_docker_publish_address) }}:{{ grafana_docker_publish_port }}/api/health"
+    status_code: 200
+    return_content: false
+  register: _grafana_docker_health
+  until: _grafana_docker_health.status | default(0) == 200
+  retries: "{{ (grafana_docker_verify_timeout | int / 5) | int }}"
+  delay: 5
+  changed_when: false
+  when:
+    - grafana_docker_verify_ready | bool
+    - grafana_docker_publish_address | length > 0
+    - not ansible_check_mode
+  tags: molecule-notest

@@ -1,0 +1,13 @@
+---
+# The networks are shared with Loki, Prometheus and a Traefik; this role owns
+# them. state: present is a no-op for one that exists, and nothing here ever
+# removes a network.
+- name: Network | create Docker networks
+  community.docker.docker_network:
+    name: "{{ grafana_docker_network }}"
+    state: present
+  loop: "{{ grafana_docker_networks }}"
+  loop_control:
+    loop_var: grafana_docker_network
+  when: grafana_docker_manage_networks | bool
+  tags: molecule-notest
