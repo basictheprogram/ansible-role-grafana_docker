@@ -83,14 +83,17 @@ If Loki runs with `auth_enabled: true`, add the tenant header to its entry:
       httpHeaderValue1: <tenant>
 ```
 
-Dashboards are not managed by this role.
+Dashboards are not managed by this role; the empty `provisioning/dashboards` directory exists so
+Grafana does not log an error for it.
 
 ## Task Flow
 
 1. **Preflight** validates the variables, and (outside molecule) that Docker works and, when the
    role does not create them, that the networks exist.
 2. **Network** creates the Docker networks.
-3. **Install** creates `grafana_docker_compose_dir`, renders `provisioning/datasources`,
+3. **Install** creates `grafana_docker_compose_dir` and the four provisioning subdirectories
+   (`datasources`, `dashboards`, `plugins`, `alerting`; Grafana logs an error at start for each one
+   that is missing), renders `provisioning/datasources`,
    `grafana.env` (only when secrets are set) and `compose.yml`. A change to the datasources or the
    env file restarts the container through a handler.
 4. **Service** runs `docker compose up`.

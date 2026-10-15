@@ -30,8 +30,20 @@ def test_compose_dir_exists(host: Host) -> None:
     assert host.file("/opt/grafana").is_directory
 
 
-def test_provisioning_dir_exists(host: Host) -> None:
+def test_provisioning_datasources_dir_exists(host: Host) -> None:
     assert host.file("/opt/grafana/provisioning/datasources").is_directory
+
+
+def test_provisioning_dashboards_dir_exists(host: Host) -> None:
+    assert host.file("/opt/grafana/provisioning/dashboards").is_directory
+
+
+def test_provisioning_plugins_dir_exists(host: Host) -> None:
+    assert host.file("/opt/grafana/provisioning/plugins").is_directory
+
+
+def test_provisioning_alerting_dir_exists(host: Host) -> None:
+    assert host.file("/opt/grafana/provisioning/alerting").is_directory
 
 
 def test_compose_file_mode(host: Host) -> None:

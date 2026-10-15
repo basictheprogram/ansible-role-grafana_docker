@@ -1,4 +1,6 @@
 ---
+# Grafana logs an error at start for each provisioning subdirectory that is
+# missing, whether or not anything is provisioned there, so create them all.
 - name: Install | compose and provisioning directories
   ansible.builtin.file:
     path: "{{ item }}"
@@ -11,6 +13,9 @@
     - "{{ grafana_docker_compose_dir }}"
     - "{{ grafana_docker_compose_dir }}/provisioning"
     - "{{ grafana_docker_compose_dir }}/provisioning/datasources"
+    - "{{ grafana_docker_compose_dir }}/provisioning/dashboards"
+    - "{{ grafana_docker_compose_dir }}/provisioning/plugins"
+    - "{{ grafana_docker_compose_dir }}/provisioning/alerting"
 
 - name: Install | render datasource provisioning
   ansible.builtin.template:
