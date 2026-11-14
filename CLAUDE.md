@@ -143,7 +143,8 @@ commit. Stop and verify between items.
 2. ✅ `templates/compose.yml.j2`, `datasources.yml.j2` and `grafana.env.j2`.
 3. ✅ `tasks/preflight.yml`, `network.yml`, `install.yml`, `service.yml`, `verify.yml`, handler.
 4. ✅ Molecule: rendered-file tests and negative preflight cases on four platforms.
-5. Create the GitHub repository and CI workflow (not done: local scaffold only).
+5. CI workflow and Dependabot config — done. Create the GitHub repository, push, read the first
+   run.
 6. Playbook, inventory group and host_vars; adopt the hand-built Grafana.
 
 ### Consumer side notes
@@ -175,10 +176,13 @@ host, because Loki expects `grafana_backend` to exist.
 
 * `pre-commit run --all-files` — fast lint/format pass. Run before
   every commit.
-* `molecule converge` then `molecule verify` — fast iteration during
-  template / task work; skips the destroy/create cycle.
-* `molecule test` — full role exercise per platform. Slow; run
-  before declaring a change done.
+* `molecule syntax` and `pytest --collect-only molecule/default/tests` —
+  static checks that need no containers.
+* **Do not run `molecule converge`, `verify` or `test` locally.** The
+  platform images use too much Docker disk. Molecule runs in CI only
+  (`.github/workflows/ci.yml`); push, then read the run (`gh run list`,
+  `gh run view --log-failed`). Until the role is pushed, the scenario is
+  unrun.
 
 ## When in doubt
 

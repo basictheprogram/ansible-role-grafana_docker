@@ -132,9 +132,10 @@ through the proxy.
 
 ## Testing
 
-```bash
-molecule test
-```
+CI runs `molecule test` on every supported platform for each push to `ansible-core-2.20`
+(`.github/workflows/ci.yml`). Locally, run only the static checks, because the platform images
+use too much Docker disk: `pre-commit run --all-files`, `molecule syntax` and
+`pytest --collect-only molecule/default/tests`.
 
 The docker tasks need a Docker daemon and are tagged `molecule-notest`; molecule checks the
 rendered files and the preflight failures. `molecule/default/pytest.ini` keeps the scenario's
