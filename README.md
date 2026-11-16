@@ -33,6 +33,10 @@ All variables are in `defaults/main.yml` and documented in `meta/argument_specs.
 | `grafana_docker_env` | `{}` | Container environment, visible in `compose.yml`. |
 | `grafana_docker_env_secrets` | `{}` | Secret environment, written to `grafana.env` with mode `0600`. |
 | `grafana_docker_datasources` | `[]` | Datasource provisioning entries, rendered as written. |
+| `grafana_docker_dashboards_version` | `""` | Git tag of the dashboards repository to deploy. Empty disables dashboard provisioning. |
+| `grafana_docker_dashboards_repo` | `git@github.com:COMAP-Math/grafana.dmz.comap.com.git` | Repository cloned on the controller. |
+| `grafana_docker_dashboards_folder` | `COMAP` | Grafana folder the dashboards appear in. |
+| `grafana_docker_dashboards_checksums` | `{}` | `{file name: sha256}` of every file to deploy; required when the version is set. |
 | `grafana_docker_log_driver` / `_log_options` | `journald` / `{}` | Docker logging driver for the container. |
 | `grafana_docker_labels` | `{}` | Extra container labels. |
 | `grafana_docker_verify_ready` / `_verify_timeout` | `true` / `120` | Wait for `/api/health` after the service starts. |
@@ -83,8 +87,36 @@ If Loki runs with `auth_enabled: true`, add the tenant header to its entry:
       httpHeaderValue1: <tenant>
 ```
 
-Dashboards are not managed by this role; the empty `provisioning/dashboards` directory exists so
-Grafana does not log an error for it.
+### Dashboards
+
+Off by default. Setting `grafana_docker_dashboards_version` to a git tag of the dashboards
+repository makes the role deploy that release, pull-based, with no token or vault entry:
+
+1. On the Ansible controller the role clones the tag over SSH (`ansible.builtin.git`, depth 1), so
+   the operator's SSH key or agent needs read access to the repository.
+2. Every file named in `grafana_docker_dashboards_checksums` is hashed (sha256) from `dist/` in the
+   clone and compared with the recorded value. A mismatch, including a moved tag, fails the run
+   before anything is copied to the host.
+3. The files are copied to `provisioning/dashboards/files/` (root:root, `0644`, readable by the
+   container's uid 472) and any other `*.json` there is removed.
+4. `provisioning/dashboards/dashboards.yml` defines a file provider for that directory: the folder
+   from `grafana_docker_dashboards_folder`, `disableDeletion: true`, `allowUiUpdates: false`,
+   `updateIntervalSeconds: 30`.
+
+Grafana polls the directory, so a changed dashboard needs no restart. Only the provider file
+notifies the restart handler (Grafana reads provider definitions at start), which happens when the
+feature is first enabled or the folder is renamed. Removing the version stops managing dashboards
+but leaves the provider and files in place.
+
+```yaml
+grafana_docker_dashboards_version: v0.1.0
+grafana_docker_dashboards_checksums:
+  judging-portal-logs.json: <sha256>
+  judging-portal-stage-logs.json: <sha256>
+```
+
+Take the checksums from the release's `SHA256SUMS` (`sha256sum` format, `<hash>  <file>`). To
+deploy a new release, change the version and the checksums together; to roll back, restore both.
 
 ## Task Flow
 
@@ -96,8 +128,10 @@ Grafana does not log an error for it.
    that is missing), renders `provisioning/datasources`,
    `grafana.env` (only when secrets are set) and `compose.yml`. A change to the datasources or the
    env file restarts the container through a handler.
-4. **Service** runs `docker compose up`.
-5. **Verify** polls `/api/health` from the host, and is skipped when nothing is published.
+4. **Dashboards** (only when `grafana_docker_dashboards_version` is set) fetches, verifies and
+   copies the release as described above.
+5. **Service** runs `docker compose up`.
+6. **Verify** polls `/api/health` from the host, and is skipped when nothing is published.
 
 ## Behind Traefik
 
@@ -138,7 +172,10 @@ use too much Docker disk: `pre-commit run --all-files`, `molecule syntax` and
 `pytest --collect-only molecule/default/tests`.
 
 The docker tasks need a Docker daemon and are tagged `molecule-notest`; molecule checks the
-rendered files and the preflight failures. `molecule/default/pytest.ini` keeps the scenario's
+rendered files and the preflight failures. The clone of the dashboards repository is also tagged
+`molecule-notest`; molecule points the role at a fixture directory instead and checks the
+provider file, the copied files, stale-file removal, that a wrong checksum copies nothing, and
+that dashboards are off by default. `molecule/default/pytest.ini` keeps the scenario's
 pytest separate from a parent project's configuration and disables two plugins that fail or clash
 when installed alongside testinfra (`pytest_molecule` on Python 3.14, and `pytest-ansible`).
 

@@ -15,6 +15,10 @@
         grafana_docker_manage_networks: "{{ item.vars.grafana_docker_manage_networks | default(true) }}"
         grafana_docker_env_secrets: "{{ item.vars.grafana_docker_env_secrets | default({}) }}"
         grafana_docker_datasources: "{{ item.vars.grafana_docker_datasources | default([]) }}"
+        grafana_docker_dashboards_version: "{{ item.vars.grafana_docker_dashboards_version | default('') }}"
+        grafana_docker_dashboards_repo: "{{ item.vars.grafana_docker_dashboards_repo | default('git@github.com:COMAP-Math/grafana.dmz.comap.com.git') }}"
+        grafana_docker_dashboards_folder: "{{ item.vars.grafana_docker_dashboards_folder | default('COMAP') }}"
+        grafana_docker_dashboards_checksums: "{{ item.vars.grafana_docker_dashboards_checksums | default({}) }}"
 
     - name: Preflight case | fail if preflight unexpectedly passed
       ansible.builtin.fail:

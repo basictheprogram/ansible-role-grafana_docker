@@ -50,6 +50,25 @@ grafana_docker_env_secrets: {}
 #     editable: false
 grafana_docker_datasources: []
 
+# Dashboard provisioning -------------------------------------------------------
+# Empty (the default) leaves dashboards alone. Set it to a git tag of the
+# dashboards repository to have the role fetch that release on the Ansible
+# controller, verify it and copy it to the host, where a Grafana file provider
+# loads it. Needs grafana_docker_dashboards_checksums. A new version is picked
+# up by Grafana within updateIntervalSeconds, without a restart.
+grafana_docker_dashboards_version: ""
+# Cloned over SSH on the controller: the operator's SSH key (agent) needs read
+# access. No token or vault entry is involved.
+grafana_docker_dashboards_repo: git@github.com:COMAP-Math/grafana.dmz.comap.com.git
+# Grafana folder the dashboards appear in.
+grafana_docker_dashboards_folder: COMAP
+# The sha256 of every dashboard file to deploy, from the release's SHA256SUMS,
+# as {file name: sha256}. Only these files, from dist/ at the tag, are copied;
+# the checksums are verified before anything reaches the host.
+#
+#   judging-portal-logs.json: 0123...abcd
+grafana_docker_dashboards_checksums: {}
+
 # Logging ----------------------------------------------------------------------
 grafana_docker_log_driver: journald
 # Driver options, for example for syslog:

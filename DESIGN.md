@@ -9,6 +9,7 @@ Replace the hand-built `grafana/compose.yml` with a role, without losing the dat
 
 * The Docker networks Grafana joins
 * `{{ grafana_docker_compose_dir }}/provisioning/datasources/datasources.yml`
+* `{{ grafana_docker_compose_dir }}/provisioning/dashboards/` (provider and files, only when a dashboards version is set)
 * `{{ grafana_docker_compose_dir }}/grafana.env` (only when secrets are set)
 * `{{ grafana_docker_compose_dir }}/compose.yml`
 * The compose project, through `community.docker.docker_compose_v2`
@@ -16,7 +17,7 @@ Replace the hand-built `grafana/compose.yml` with a role, without losing the dat
 ## What it does not manage
 
 * Docker itself (`realtime.docker`).
-* Dashboards and alerting provisioning; dashboards live in Grafana's volume.
+* Alerting provisioning. Dashboards are provisioned only when `grafana_docker_dashboards_version` is set; otherwise they live in Grafana's volume.
 * A reverse proxy. Traefik labels, if wanted, go in `grafana_docker_labels`.
 * A firewall. Docker-published ports bypass ufw, so restrict the published port on the host or
   the network.
@@ -42,6 +43,12 @@ Replace the hand-built `grafana/compose.yml` with a role, without losing the dat
 8. **Verify from the host.** `/api/health` is polled on the published address and skipped when
    nothing is published.
 9. **Restart on provisioning or secret change.** Grafana reads both at start only.
+
+10. **Dashboards: pull a pinned release, checksum-verified.** The dashboards repository is private
+    and generates the JSON. The role clones the tag on the controller over SSH, so no secret is
+    added, and compares each file with a sha256 kept in host vars, so a moved tag cannot change what
+    is deployed. Verification precedes any copy. Dashboards are not a restart trigger (the file
+    provider polls); the provider file is, because Grafana reads providers at start.
 
 ## Dropped from the original compose
 

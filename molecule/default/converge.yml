@@ -10,7 +10,40 @@
       changed_when: false
       when: ansible_facts.os_family == 'Debian'
 
+    # The role clones the release in a task tagged molecule-notest (no network
+    # access to the private repository), so a fixture directory on the
+    # controller stands in for the clone's dist/ directory.
+    - name: Dashboard fixture | controller directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: grafana-dashboards-fixture-
+      register: _fixture_dir
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Dashboard fixture | files
+      ansible.builtin.copy:
+        content: "{{ item.value }}"
+        dest: "{{ _fixture_dir.path }}/{{ item.key }}"
+        mode: "0644"
+      loop: "{{ _fixture_files | dict2items }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
   vars:
+    # sha256 of the exact contents of the two fixture files.
+    _fixture_files:
+      molecule-a.json: '{"title": "Molecule A"}'
+      molecule-b.json: '{"title": "Molecule B"}'
+    _fixture_checksums:
+      molecule-a.json: 713224388cdc8f64b7421812a9d5511f04a25b2f87ad2180f6eaa769466a9695
+      molecule-b.json: 30338280316609ab73dc91c59817cbb2828ebadb0ff5eeac45473b7c5bb5026d
+    _grafana_docker_dashboards_src: "{{ _fixture_dir.path }}"
+    grafana_docker_dashboards_version: v0.0.0-molecule
+    grafana_docker_dashboards_checksums: "{{ _fixture_checksums }}"
+
     # Grafana is never started in molecule (the docker tasks are tagged
     # molecule-notest); only the rendered files are tested. The secret below is
     # a fake test value.
@@ -62,6 +95,90 @@
         grafana_docker_networks: []
         grafana_docker_datasources: []
 
+    - name: Stale dashboard | create the directory
+      ansible.builtin.file:
+        path: /opt/grafana-stale/provisioning/dashboards/files
+        state: directory
+        mode: "0755"
+
+    # Seeded once: the marker keeps later runs from recreating the file the
+    # role removes, so the second converge reports no change.
+    - name: Stale dashboard | marker
+      ansible.builtin.copy:
+        content: ""
+        dest: /opt/grafana-stale/provisioning/dashboards/files/.seeded
+        force: false
+        mode: "0644"
+      register: _stale_marker
+
+    - name: Stale dashboard | file from a previous version
+      ansible.builtin.copy:
+        content: "{}"
+        dest: /opt/grafana-stale/provisioning/dashboards/files/old-version.json
+        mode: "0644"
+      when: _stale_marker is changed  # noqa: no-handler
+
+    - name: Stale dashboard | install the current version
+      ansible.builtin.include_role:
+        name: realtime.grafana_docker
+        tasks_from: dashboards.yml
+      vars:
+        grafana_docker_compose_dir: /opt/grafana-stale
+
+    - name: Feature off | role with no dashboards version
+      ansible.builtin.include_role:
+        name: realtime.grafana_docker
+      vars:
+        grafana_docker_compose_dir: /opt/grafana-off
+        grafana_docker_dashboards_version: ""
+        grafana_docker_dashboards_checksums: {}
+
+- name: Dashboard checksum failure
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Bad checksum | fixture directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: grafana-dashboards-bad-
+      register: _bad_dir
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Bad checksum | fixture file
+      ansible.builtin.copy:
+        content: '{"title": "Molecule A"}'
+        dest: "{{ _bad_dir.path }}/molecule-a.json"
+        mode: "0644"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Bad checksum | the role must stop before copying
+      block:
+        - name: Bad checksum | install a file whose checksum is wrong
+          ansible.builtin.include_role:
+            name: realtime.grafana_docker
+            tasks_from: dashboards.yml
+          vars:
+            grafana_docker_compose_dir: /opt/grafana-badsum
+            grafana_docker_dashboards_version: v0.0.0-bad
+            _grafana_docker_dashboards_src: "{{ _bad_dir.path }}"
+            grafana_docker_dashboards_checksums:
+              molecule-a.json: "0000000000000000000000000000000000000000000000000000000000000000"
+
+        - name: Bad checksum | fail if the install unexpectedly passed
+          ansible.builtin.fail:
+            msg: "dashboards were installed despite a wrong checksum"
+      rescue:
+        - name: Bad checksum | assert the failure is the checksum
+          ansible.builtin.assert:
+            that:
+              - "'does not match the recorded sha256 checksum' in ansible_failed_result.msg | default('')"
+            fail_msg: "failed, but not on the checksum: {{ ansible_failed_result.msg | default('') }}"
+            quiet: true
+
 - name: Preflight cases
   hosts: all
   gather_facts: true
@@ -110,6 +227,35 @@
           grafana_docker_datasources:
             - { name: One, type: prometheus, isDefault: true }
             - { name: Two, type: loki, isDefault: true }
+      - name: dashboards version that looks like a git option
+        expect: "grafana_docker_dashboards_version must be a git tag"
+        vars:
+          grafana_docker_dashboards_version: "--upload-pack=x"
+          grafana_docker_dashboards_checksums:
+            a.json: "{{ 'a' * 64 }}"
+      - name: dashboards folder empty
+        expect: "grafana_docker_dashboards_folder must not be empty"
+        vars:
+          grafana_docker_dashboards_version: v1.0.0
+          grafana_docker_dashboards_folder: ""
+          grafana_docker_dashboards_checksums:
+            a.json: "{{ 'a' * 64 }}"
+      - name: dashboards version without checksums
+        expect: "grafana_docker_dashboards_checksums must map"
+        vars:
+          grafana_docker_dashboards_version: v1.0.0
+      - name: dashboards checksum that is not a sha256
+        expect: "grafana_docker_dashboards_checksums must map"
+        vars:
+          grafana_docker_dashboards_version: v1.0.0
+          grafana_docker_dashboards_checksums:
+            a.json: "abc123"
+      - name: dashboards file name that escapes the directory
+        expect: "grafana_docker_dashboards_checksums must map"
+        vars:
+          grafana_docker_dashboards_version: v1.0.0
+          grafana_docker_dashboards_checksums:
+            "../a.json": "{{ 'a' * 64 }}"
   tasks:
     - name: Preflight case | run every invalid case
       ansible.builtin.include_tasks: tasks/preflight_case.yml

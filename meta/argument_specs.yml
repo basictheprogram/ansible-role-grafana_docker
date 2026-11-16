@@ -4,8 +4,9 @@ argument_specs:
     short_description: Deploy Grafana as a Docker Compose service
     description:
       - Creates the Docker networks, renders datasource provisioning, a secret
-        env file and the compose file, brings the project up with docker
-        compose, and waits for /api/health. Does not install Docker.
+        env file and the compose file, optionally provisions dashboards from a
+        pinned release, brings the project up with docker compose, and waits
+        for /api/health. Does not install Docker.
     options:
       grafana_docker_image:
         type: str
@@ -81,6 +82,26 @@ argument_specs:
         elements: dict
         description: >-
           Datasource provisioning entries, rendered as written under datasources:. Each needs name and type.
+      grafana_docker_dashboards_version:
+        type: str
+        default: ""
+        description: >-
+          Git tag of the dashboards repository to deploy. Empty disables dashboard provisioning. The release is fetched on the Ansible controller, verified against grafana_docker_dashboards_checksums and then copied to the host; Grafana loads it through a file provider and picks up a new version without a restart.
+      grafana_docker_dashboards_repo:
+        type: str
+        default: "git@github.com:COMAP-Math/grafana.dmz.comap.com.git"
+        description: >-
+          Git URL of the dashboards repository, cloned on the controller. For an SSH URL the operator's SSH key needs read access; the role handles no token.
+      grafana_docker_dashboards_folder:
+        type: str
+        default: "COMAP"
+        description: >-
+          Grafana folder the provisioned dashboards appear in.
+      grafana_docker_dashboards_checksums:
+        type: dict
+        default: {}
+        description: >-
+          Mapping of dashboard file name to its sha256, for every file in dist/ at the tag that is to be deployed. Required when grafana_docker_dashboards_version is set. A mismatch fails the run before anything is copied. Files in the dashboards directory that are not listed are removed.
       grafana_docker_log_driver:
         type: str
         default: "journald"

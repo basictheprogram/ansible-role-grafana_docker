@@ -98,6 +98,36 @@
     fail_msg: "only one entry in grafana_docker_datasources may set isDefault: true"
     quiet: true
 
+- name: Preflight | dashboard release settings
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_dashboards_version | string is match('^[A-Za-z0-9][A-Za-z0-9._-]*$')
+      - grafana_docker_dashboards_repo is string
+      - grafana_docker_dashboards_repo | length > 0
+      - grafana_docker_dashboards_repo is not match('^-')
+      - grafana_docker_dashboards_folder is string
+      - grafana_docker_dashboards_folder | length > 0
+    fail_msg: >-
+      grafana_docker_dashboards_version must be a git tag (letters, digits, '.', '_' or '-',
+      not starting with '-'), and grafana_docker_dashboards_repo and
+      grafana_docker_dashboards_folder must not be empty
+    quiet: true
+  when: grafana_docker_dashboards_version | string | length > 0
+
+- name: Preflight | dashboard checksums
+  ansible.builtin.assert:
+    that:
+      - grafana_docker_dashboards_checksums is mapping
+      - grafana_docker_dashboards_checksums | length > 0
+      - grafana_docker_dashboards_checksums.keys() | reject('match', '^[A-Za-z0-9][A-Za-z0-9._-]*\.json$') | list | length == 0
+      - grafana_docker_dashboards_checksums.values() | reject('match', '^[0-9a-f]{64}$') | list | length == 0
+    fail_msg: >-
+      grafana_docker_dashboards_checksums must map each dashboard file name (a plain
+      *.json name) to its lowercase sha256, with at least one entry, when
+      grafana_docker_dashboards_version is set
+    quiet: true
+  when: grafana_docker_dashboards_version | string | length > 0
+
 - name: Preflight | Docker is available
   ansible.builtin.command: docker info
   register: _grafana_docker_docker_check

@@ -124,14 +124,16 @@ Role-specific subsystem scopes: `install`, `network`, `service`, `verify`, `pref
 * Secrets live in `grafana.env` (0600), not in `compose.yml`.
 * Datasources are a pass-through list rendered unchanged.
 * The image tag defaults to `latest`, matching the hand-built compose file.
-* The role never installs Docker. Dashboards, proxy, firewall and backups are out of scope.
+* The role never installs Docker. Proxy, firewall and backups are out of scope.
+* Dashboards are provisioned only when `grafana_docker_dashboards_version` is set: fetched on the
+  controller, sha256-verified against host vars before any copy, loaded by a file provider; a
+  dashboard change never restarts Grafana.
 
 ### Open questions
 
 If a task touches one of these, leave a `# TODO(open-q):` comment:
 
 * Whether to pin `grafana_docker_version` instead of `latest`.
-* Whether the role should provision dashboards.
 * The first host's live volume name (expected `grafana_grafana-data`).
 
 ### Implementation order

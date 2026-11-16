@@ -1,0 +1,128 @@
+---
+# Pull-based dashboard CD: the pinned release is fetched on the Ansible
+# controller, every file is checked against the sha256 recorded in
+# grafana_docker_dashboards_checksums, and only then is anything copied to the
+# host. Grafana's file provider polls the directory, so a new version needs no
+# restart; no handler is notified for the dashboard files.
+#
+# Only the provider file notifies the restart handler, because Grafana reads
+# provider definitions at start. That happens once, when the feature is first
+# enabled or its folder is renamed.
+#
+# The clone is tagged molecule-notest (molecule has no network access to the
+# private repository). In molecule _grafana_docker_dashboards_src is a play
+# variable pointing at a fixture directory on the controller.
+- name: Dashboards | fetch, verify and install the pinned release
+  block:
+    - name: Dashboards | controller scratch directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: grafana-dashboards-
+      register: _grafana_docker_dashboards_tmp
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      tags: molecule-notest
+
+    # A moved tag is caught by the checksums below, not here.
+    - name: Dashboards | clone the release tag on the controller
+      ansible.builtin.git:
+        repo: "{{ grafana_docker_dashboards_repo }}"
+        dest: "{{ _grafana_docker_dashboards_tmp.path }}"
+        version: "{{ grafana_docker_dashboards_version }}"
+        depth: 1
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      tags: molecule-notest
+
+    - name: Dashboards | locate the generated files
+      ansible.builtin.set_fact:
+        _grafana_docker_dashboards_src: "{{ _grafana_docker_dashboards_tmp.path }}/dist"
+      tags: molecule-notest
+
+    - name: Dashboards | checksum the files on the controller
+      ansible.builtin.stat:
+        path: "{{ _grafana_docker_dashboards_src }}/{{ item.key }}"
+        checksum_algorithm: sha256
+      register: _grafana_docker_dashboards_stat
+      loop: "{{ grafana_docker_dashboards_checksums | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      delegate_to: localhost
+      become: false
+      check_mode: false
+
+    # Nothing below this task runs when it fails.
+    - name: Dashboards | every file matches its recorded checksum
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.checksum == item.item.value
+        fail_msg: >-
+          {{ item.item.key }} in {{ grafana_docker_dashboards_version }} does not match the recorded
+          sha256 checksum ({{ item.stat.checksum | default('file missing') }}, expected
+          {{ item.item.value }}); nothing was copied to the host
+        quiet: true
+      loop: "{{ _grafana_docker_dashboards_stat.results }}"
+      loop_control:
+        label: "{{ item.item.key }}"
+
+    - name: Dashboards | dashboard directory
+      ansible.builtin.file:
+        path: "{{ grafana_docker_compose_dir }}/provisioning/dashboards/files"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Dashboards | render the file provider
+      ansible.builtin.template:
+        src: dashboards.yml.j2
+        dest: "{{ grafana_docker_compose_dir }}/provisioning/dashboards/dashboards.yml"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart grafana
+
+    # Grafana runs as uid 472 in group root, so 0644 root:root is readable
+    # through the read-only mount.
+    - name: Dashboards | copy the verified files
+      ansible.builtin.copy:
+        src: "{{ _grafana_docker_dashboards_src }}/{{ item.key }}"
+        dest: "{{ grafana_docker_compose_dir }}/provisioning/dashboards/files/{{ item.key }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop: "{{ grafana_docker_dashboards_checksums | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Dashboards | find files left by another version
+      ansible.builtin.find:
+        paths: "{{ grafana_docker_compose_dir }}/provisioning/dashboards/files"
+        patterns: "*.json"
+        file_type: file
+      register: _grafana_docker_dashboards_found
+
+    - name: Dashboards | remove files that are not in this version
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: >-
+        {{ _grafana_docker_dashboards_found.files | map(attribute='path') | list
+        | difference(grafana_docker_dashboards_checksums.keys()
+        | map('regex_replace', '^', grafana_docker_compose_dir ~ '/provisioning/dashboards/files/') | list) }}
+  always:
+    - name: Dashboards | remove the controller scratch directory
+      ansible.builtin.file:
+        path: "{{ _grafana_docker_dashboards_tmp.path }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      when: _grafana_docker_dashboards_tmp.path is defined
+      tags: molecule-notest

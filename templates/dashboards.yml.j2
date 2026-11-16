@@ -1,0 +1,15 @@
+---
+# Managed by Ansible (realtime.grafana_docker). Local changes are overwritten.
+apiVersion: 1
+
+providers:
+  - name: {{ grafana_docker_dashboards_folder | to_json }}
+    orgId: 1
+    folder: {{ grafana_docker_dashboards_folder | to_json }}
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      # The compose file mounts ./provisioning at /etc/grafana/provisioning.
+      path: /etc/grafana/provisioning/dashboards/files

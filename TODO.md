@@ -8,7 +8,7 @@
 * Add `playbooks/grafana_docker.yml`, an inventory group and the first host's host_vars.
 * Check the live volume name on the first host (expected `grafana_grafana-data`).
 * Decide whether to pin `grafana_docker_version` instead of `latest`.
-* Dashboards are not managed; add a provider and files if they should be.
+* Dashboard provisioning is tested only with a fixture directory; the SSH clone has not run in molecule.
 * Molecule does not start Grafana; a real container has not been tested yet.
 * The scenario's `pytest.ini` works around `pytest_molecule` (Python 3.14) and `pytest-ansible`
   clashing with testinfra in the devcontainer; the same fix is needed in the other roles.

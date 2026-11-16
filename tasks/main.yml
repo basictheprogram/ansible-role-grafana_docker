@@ -9,6 +9,10 @@
 - name: Render provisioning, environment and compose file
   ansible.builtin.import_tasks: install.yml
 
+- name: Provision dashboards from a pinned release
+  ansible.builtin.import_tasks: dashboards.yml
+  when: grafana_docker_dashboards_version | string | length > 0
+
 - name: Start Grafana
   ansible.builtin.import_tasks: service.yml
 

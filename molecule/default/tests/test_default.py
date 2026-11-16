@@ -18,6 +18,7 @@ _ENV = "/opt/grafana/grafana.env"
 _DATASOURCES = "/opt/grafana/provisioning/datasources/datasources.yml"
 _BARE_COMPOSE = "/opt/grafana-bare/compose.yml"
 _BARE_ENV = "/opt/grafana-bare/grafana.env"
+_DASHBOARDS = "/opt/grafana/provisioning/dashboards"
 _FAKE_SECRET = "molecule-fake-password"  # noqa: S105 - fixture value from converge.yml
 
 
@@ -147,3 +148,50 @@ def test_bare_compose_without_env_file(host: Host) -> None:
 
 def test_bare_render_writes_no_env_file(host: Host) -> None:
     assert not host.file(_BARE_ENV).exists
+
+
+def test_dashboard_provider_file(host: Host) -> None:
+    provider = load_yaml(host, f"{_DASHBOARDS}/dashboards.yml")["providers"][0]
+    assert provider["folder"] == "COMAP"
+    assert provider["type"] == "file"
+    assert provider["disableDeletion"] is True
+    assert provider["allowUiUpdates"] is False
+    assert provider["updateIntervalSeconds"] == 30
+    assert provider["options"]["path"] == "/etc/grafana/provisioning/dashboards/files"
+
+
+def test_dashboard_provider_path_is_inside_the_mount(host: Host) -> None:
+    # The container sees ./provisioning at /etc/grafana/provisioning.
+    assert host.file(f"{_DASHBOARDS}/files").is_directory
+
+
+def test_dashboard_files_are_copied_readable(host: Host) -> None:
+    for name in ("molecule-a.json", "molecule-b.json"):
+        f = host.file(f"{_DASHBOARDS}/files/{name}")
+        assert f.exists
+        assert f.mode == 0o644
+        assert f.user == "root"
+
+
+def test_dashboard_file_content(host: Host) -> None:
+    assert host.file(f"{_DASHBOARDS}/files/molecule-a.json").content_string == '{"title": "Molecule A"}'
+
+
+def test_stale_dashboard_is_removed(host: Host) -> None:
+    files = "/opt/grafana-stale/provisioning/dashboards/files"
+    assert not host.file(f"{files}/old-version.json").exists
+    assert host.file(f"{files}/molecule-a.json").exists
+
+
+def test_bad_checksum_copies_nothing(host: Host) -> None:
+    assert not host.file("/opt/grafana-badsum").exists
+
+
+def test_dashboards_off_by_default(host: Host) -> None:
+    assert not host.file("/opt/grafana-off/provisioning/dashboards/dashboards.yml").exists
+    assert not host.file("/opt/grafana-off/provisioning/dashboards/files").exists
+    assert host.file("/opt/grafana-off/provisioning/dashboards").is_directory
+
+
+def test_bare_render_has_no_dashboard_provider(host: Host) -> None:
+    assert not host.file("/opt/grafana-bare/provisioning/dashboards/dashboards.yml").exists
